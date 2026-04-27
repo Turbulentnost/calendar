@@ -8,6 +8,7 @@ urlpatterns = [
     path("api/v1/", include("user.urls")),
     path("api/admin/", include("user.urls.admin")),
     path("api/admin/", include("taskboard.urls.admin")),
+    path("api/calendar/", include("calendarfunc.urls")),
     path("", include("core.urls")),
 ]
 

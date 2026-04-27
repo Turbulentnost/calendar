@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from user.permissions import can_assign_to_user
+
 from .models import Task
 
 
@@ -40,6 +42,14 @@ class TaskSerializer(serializers.ModelSerializer):
         value = value.strip()
         if not value:
             raise serializers.ValidationError("Укажите название задачи.")
+        return value
+
+    def validate_assignee(self, value):
+        request = self.context.get("request")
+        if request and not can_assign_to_user(request.user, value):
+            raise serializers.ValidationError(
+                "Недостаточно прав для постановки задачи этому пользователю."
+            )
         return value
 
     def create(self, validated_data):

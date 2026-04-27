@@ -1,6 +1,14 @@
 from rest_framework import permissions
 
 
+def can_assign_to_user(actor, target) -> bool:
+    if not actor or not actor.is_authenticated:
+        return False
+    if actor.is_superuser:
+        return True
+    return actor.role <= target.role
+
+
 class IsStaffWithAdminRole(permissions.BasePermission):
     """
     staff-пользователи с ролью 0.0 (суперадмин) или 1.0 (админ), либо is_superuser.

@@ -62,6 +62,20 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return user
 
 
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    photo = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "first_name",
+            "last_name",
+            "photo",
+            "department",
+            "job_title",
+        )
+
+
 class AdminUserSerializer(serializers.ModelSerializer):
     photo_url = serializers.SerializerMethodField()
     password = serializers.CharField(write_only=True, required=False, allow_blank=False)

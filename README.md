@@ -1,0 +1,537 @@
+# Backend API
+
+Базовый URL: `http://<host>/`
+
+Для пользовательских запросов нужен заголовок:
+
+```http
+Authorization: Token <user_token>
+```
+
+Для запросов задач проекта дополнительно нужен проектный JWT:
+
+```http
+X-Project-Token: <project_token>
+```
+
+## Auth
+
+### Регистрация
+
+`POST /api/v1/auth/register/`
+
+Создать пользователя и новый проект:
+
+```json
+{
+  "nickname": "ivan",
+  "password": "12345",
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "project_action": "create_project",
+  "project": {
+    "login": "main-office",
+    "password": "project-pass",
+    "title": "Основной проект",
+    "name": "Комната офиса",
+    "description": "Рабочие задачи отдела"
+  }
+}
+```
+
+Создать пользователя и войти в существующий проект:
+
+```json
+{
+  "nickname": "petr",
+  "password": "12345",
+  "project_action": "join_project",
+  "project_login": "main-office",
+  "project_password": "project-pass"
+}
+```
+
+Ответ:
+
+```json
+{
+  "token": "user-token",
+  "project_token": "project-jwt",
+  "user": {
+    "id": 1,
+    "nickname": "ivan",
+    "first_name": "Иван",
+    "last_name": "Иванов",
+    "role": 1.0
+  },
+  "project": {
+    "id": 1,
+    "login": "main-office",
+    "title": "Основной проект"
+  }
+}
+```
+
+### Вход пользователя
+
+`POST /api/v1/auth/login/`
+
+```json
+{
+  "nickname": "ivan",
+  "password": "12345"
+}
+```
+
+Ответ:
+
+```json
+{
+  "token": "user-token",
+  "user": {
+    "id": 1,
+    "nickname": "ivan",
+    "role": 1.0
+  }
+}
+```
+
+### Выход пользователя
+
+`POST /api/v1/auth/logout/`
+
+Тело не требуется.
+
+Ответ: `204 No Content`.
+
+### Текущий пользователь
+
+`GET /api/v1/auth/me/`
+
+Ответ:
+
+```json
+{
+  "id": 1,
+  "nickname": "ivan",
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "photo": null,
+  "photo_url": null,
+  "role": 1.0,
+  "department": "",
+  "job_title": "",
+  "is_staff": false,
+  "is_active": true,
+  "date_joined": "2026-04-27T10:00:00Z"
+}
+```
+
+### Обновить профиль
+
+`PATCH /api/v1/auth/me/`
+
+```json
+{
+  "first_name": "Иван",
+  "last_name": "Петров",
+  "department": "Разработка",
+  "job_title": "Backend developer"
+}
+```
+
+Ответ: объект текущего пользователя.
+
+### Сменить пароль
+
+`POST /api/v1/auth/change-password/`
+
+```json
+{
+  "old_password": "12345",
+  "new_password": "new-pass"
+}
+```
+
+Ответ:
+
+```json
+{
+  "token": "new-user-token"
+}
+```
+
+### Пользователи
+
+`GET /api/v1/users/`
+
+Ответ:
+
+```json
+[
+  {
+    "id": 1,
+    "nickname": "ivan",
+    "role": 1.0
+  }
+]
+```
+
+`POST /api/v1/users/`
+
+```json
+{
+  "nickname": "user2",
+  "password": "12345",
+  "first_name": "User",
+  "last_name": "Two",
+  "role": 10.0
+}
+```
+
+Ответ: созданный пользователь.
+
+## Проекты
+
+### Список проектов, созданных пользователем
+
+`GET /api/calendar/projects/`
+
+Ответ:
+
+```json
+[
+  {
+    "id": 1,
+    "login": "main-office",
+    "title": "Основной проект",
+    "creator": 1,
+    "creator_nickname": "ivan",
+    "name": "Комната офиса",
+    "image": null,
+    "image_url": null,
+    "description": "Рабочие задачи отдела",
+    "room_created_at": "2026-04-27T10:00:00Z"
+  }
+]
+```
+
+### Создать проект
+
+`POST /api/calendar/projects/`
+
+```json
+{
+  "login": "main-office",
+  "password": "project-pass",
+  "title": "Основной проект",
+  "name": "Комната офиса",
+  "description": "Рабочие задачи отдела"
+}
+```
+
+Ответ:
+
+```json
+{
+  "project_token": "project-jwt",
+  "project": {
+    "id": 1,
+    "login": "main-office",
+    "title": "Основной проект"
+  }
+}
+```
+
+### Войти в проект
+
+`POST /api/calendar/projects/login/`
+
+```json
+{
+  "login": "main-office",
+  "password": "project-pass"
+}
+```
+
+Ответ:
+
+```json
+{
+  "project_token": "project-jwt",
+  "project": {
+    "id": 1,
+    "login": "main-office",
+    "title": "Основной проект"
+  }
+}
+```
+
+### Текущий проект по токену
+
+`GET /api/calendar/projects/current/`
+
+Нужен `X-Project-Token`.
+
+Ответ: объект проекта.
+
+### Получить проект
+
+`GET /api/calendar/projects/<id>/`
+
+Ответ: объект проекта.
+
+### Обновить проект
+
+`PATCH /api/calendar/projects/<id>/`
+
+```json
+{
+  "title": "Новое название",
+  "description": "Новое описание",
+  "password": "new-project-pass"
+}
+```
+
+Ответ: обновленный проект.
+
+### Удалить проект
+
+`DELETE /api/calendar/projects/<id>/`
+
+Ответ: `204 No Content`.
+
+## Задачи проекта
+
+Для всех запросов нужен `Authorization` и `X-Project-Token`.
+
+### Список задач
+
+`GET /api/calendar/tasks/`
+
+Фильтры: `is_closed`, `importance`, `status`, `assigned_to_me`, `authored_by_me`.
+
+Пример:
+
+`GET /api/calendar/tasks/?is_closed=false&assigned_to_me=true`
+
+Ответ:
+
+```json
+[
+  {
+    "id": 1,
+    "project": 1,
+    "author": 1,
+    "author_nickname": "ivan",
+    "assignee": 2,
+    "assignee_nickname": "petr",
+    "date_from": "2026-04-27",
+    "date_to": "2026-04-28",
+    "short_description": "Подготовить отчет по задачам",
+    "description": "Собрать данные и отправить руководителю.",
+    "deadline": "2026-04-28T18:00:00Z",
+    "importance": "normal",
+    "status": "new",
+    "is_closed": false,
+    "is_carried_over": false,
+    "carried_over_at": null
+  }
+]
+```
+
+### Создать задачу
+
+`POST /api/calendar/tasks/`
+
+```json
+{
+  "assignee": 2,
+  "date_from": "2026-04-27",
+  "date_to": "2026-04-28",
+  "short_description": "Подготовить отчет по задачам",
+  "description": "Собрать данные и отправить руководителю.",
+  "deadline": "2026-04-28T18:00:00Z",
+  "importance": "normal",
+  "status": "new"
+}
+```
+
+Ответ: созданная задача.
+
+### Получить задачу
+
+`GET /api/calendar/tasks/<id>/`
+
+Ответ: объект задачи.
+
+### Обновить задачу
+
+`PATCH /api/calendar/tasks/<id>/`
+
+```json
+{
+  "short_description": "Обновить отчет",
+  "importance": "high",
+  "status": "in_progress"
+}
+```
+
+Ответ: обновленная задача.
+
+### Удалить задачу
+
+`DELETE /api/calendar/tasks/<id>/`
+
+Ответ: `204 No Content`.
+
+### Закрыть задачу
+
+`POST /api/calendar/tasks/<id>/close/`
+
+Тело не требуется.
+
+Ответ: задача со статусом `done` и `is_closed: true`.
+
+### Открыть задачу заново
+
+`POST /api/calendar/tasks/<id>/reopen/`
+
+Тело не требуется.
+
+Ответ: задача со статусом `in_progress` и `is_closed: false`.
+
+### Перенести задачу на сегодня
+
+`POST /api/calendar/tasks/<id>/carry-over/`
+
+Тело не требуется.
+
+Ответ: задача с `is_carried_over: true`, сегодняшними датами и `importance: critical`.
+
+## Admin API
+
+Нужен пользователь с правами staff/admin.
+
+### Статистика
+
+`GET /api/admin/stats/`
+
+Ответ:
+
+```json
+{
+  "total_users": 10,
+  "superadmins": 1,
+  "admins": 2
+}
+```
+
+### Список пользователей
+
+`GET /api/admin/users/?q=ivan&page=1&page_size=10`
+
+Ответ:
+
+```json
+{
+  "results": [],
+  "page": 1,
+  "page_size": 10,
+  "total": 0,
+  "pages": 1
+}
+```
+
+### Создать пользователя админом
+
+`POST /api/admin/users/`
+
+```json
+{
+  "nickname": "manager",
+  "password": "12345",
+  "first_name": "Manager",
+  "role": 2.0,
+  "is_staff": true,
+  "is_active": true
+}
+```
+
+Ответ: созданный пользователь.
+
+### Получить пользователя
+
+`GET /api/admin/users/<id>/`
+
+Ответ: объект пользователя.
+
+### Обновить пользователя
+
+`PUT /api/admin/users/<id>/`
+
+```json
+{
+  "nickname": "manager",
+  "first_name": "Manager",
+  "last_name": "",
+  "role": 2.0,
+  "department": "Управление",
+  "job_title": "Manager",
+  "is_staff": true,
+  "is_active": true
+}
+```
+
+Ответ: обновленный пользователь.
+
+### Удалить пользователя
+
+`DELETE /api/admin/users/<id>/`
+
+Ответ: `204 No Content`.
+
+### Сбросить пароль пользователя
+
+`POST /api/admin/users/<id>/reset-password/`
+
+Тело не требуется.
+
+Ответ:
+
+```json
+{
+  "detail": "Временный пароль сгенерирован.",
+  "temp_password": "abc123"
+}
+```
+
+### Админские задачи
+
+`GET /api/admin/tasks/`
+
+Ответ: список задач.
+
+`POST /api/admin/tasks/`
+
+```json
+{
+  "title": "Задача",
+  "description": "Описание",
+  "priority": "medium",
+  "deadline": "2026-04-28",
+  "assignee": 2
+}
+```
+
+Ответ: созданная задача.
+
+## Health
+
+`GET /health/`
+
+Ответ:
+
+```text
+ok
+```
