@@ -1,8 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from user.permissions import can_assign_to_user
-
 from .models import Project, ProjectMembership, ProjectTask
 
 User = get_user_model()
@@ -12,6 +10,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     creator_nickname = serializers.CharField(source="creator.nickname", read_only=True)
     password = serializers.CharField(write_only=True, min_length=1, required=False)
     image_url = serializers.SerializerMethodField()
+    my_project_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -26,6 +25,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "image",
             "image_url",
             "description",
+            "my_project_role",
             "password",
         )
         read_only_fields = (
@@ -34,6 +34,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "creator_nickname",
             "room_created_at",
             "image_url",
+            "my_project_role",
         )
 
     def get_image_url(self, obj):
@@ -42,6 +43,13 @@ class ProjectSerializer(serializers.ModelSerializer):
             if request:
                 return request.build_absolute_uri(obj.image.url)
         return None
+
+    def get_my_project_role(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        membership = ProjectMembership.objects.filter(project=obj, user=request.user).first()
+        return membership.role if membership else None
 
     def validate_title(self, value):
         value = value.strip()
@@ -80,6 +88,31 @@ class ProjectSerializer(serializers.ModelSerializer):
             instance.set_password(password)
             instance.save(update_fields=["password_hash"])
         return instance
+
+
+class ProjectMembershipSerializer(serializers.ModelSerializer):
+    user_nickname = serializers.CharField(source="user.nickname", read_only=True)
+    user_full_name = serializers.CharField(source="user.get_full_name", read_only=True)
+
+    class Meta:
+        model = ProjectMembership
+        fields = (
+            "id",
+            "project",
+            "user",
+            "user_nickname",
+            "user_full_name",
+            "role",
+            "joined_at",
+        )
+        read_only_fields = (
+            "id",
+            "project",
+            "user",
+            "user_nickname",
+            "user_full_name",
+            "joined_at",
+        )
 
 
 class ProjectLoginSerializer(serializers.Serializer):
@@ -146,11 +179,15 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         actor = self.context["request"].user
         assignee = attrs.get("assignee", getattr(self.instance, "assignee", None))
 
-        if not ProjectMembership.objects.filter(project=project, user=actor).exists():
+        actor_membership = ProjectMembership.objects.filter(project=project, user=actor).first()
+        if not actor_membership:
             raise serializers.ValidationError("Вы не состоите в этом проекте.")
-        if assignee and not ProjectMembership.objects.filter(project=project, user=assignee).exists():
+        assignee_membership = None
+        if assignee:
+            assignee_membership = ProjectMembership.objects.filter(project=project, user=assignee).first()
+        if assignee and not assignee_membership:
             raise serializers.ValidationError({"assignee": "Пользователь не состоит в этом проекте."})
-        if assignee and not can_assign_to_user(actor, assignee):
+        if assignee and actor_membership.role > assignee_membership.role:
             raise serializers.ValidationError(
                 {"assignee": "Недостаточно прав для постановки задачи этому пользователю."}
             )

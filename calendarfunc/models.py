@@ -39,6 +39,9 @@ class Project(models.Model):
 
 
 class ProjectMembership(models.Model):
+    PROJECT_ROLE_ADMIN = 1.0
+    PROJECT_ROLE_MEMBER = 10.0
+
     project = models.ForeignKey(
         Project,
         related_name="memberships",
@@ -51,6 +54,7 @@ class ProjectMembership(models.Model):
         on_delete=models.CASCADE,
         verbose_name="Пользователь",
     )
+    role = models.FloatField("Роль в проекте", default=PROJECT_ROLE_MEMBER)
     joined_at = models.DateTimeField("Дата входа в проект", auto_now_add=True)
 
     class Meta:
@@ -61,6 +65,9 @@ class ProjectMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} -> {self.project}"
+
+    def is_project_admin(self) -> bool:
+        return self.role <= self.PROJECT_ROLE_ADMIN
 
 
 class ProjectTask(models.Model):

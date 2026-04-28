@@ -9,7 +9,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Project, ProjectMembership, ProjectTask
-from .serializers import ProjectLoginSerializer, ProjectSerializer, ProjectTaskSerializer
+from .serializers import (
+    ProjectLoginSerializer,
+    ProjectMembershipSerializer,
+    ProjectSerializer,
+    ProjectTaskSerializer,
+)
 from .tokens import create_project_token, decode_project_token
 
 
@@ -36,6 +41,17 @@ def _is_project_member(user, project: Project) -> bool:
     return ProjectMembership.objects.filter(project=project, user=user).exists()
 
 
+def _get_membership(user, project: Project) -> ProjectMembership:
+    if not user or not user.is_authenticated or not project:
+        return None
+    return ProjectMembership.objects.filter(project=project, user=user).first()
+
+
+def _is_project_admin(user, project: Project) -> bool:
+    membership = _get_membership(user, project)
+    return bool(user.is_superuser or (membership and membership.is_project_admin()))
+
+
 def _get_active_project(request) -> Project:
     project = _get_project_from_token(request)
     if not _is_project_member(request.user, project):
@@ -44,7 +60,7 @@ def _get_active_project(request) -> Project:
 
 
 def _can_manage_project(user, project: Project) -> bool:
-    return bool(user.is_superuser or project.creator_id == user.id)
+    return _is_project_admin(user, project)
 
 
 class ProjectListCreateApi(generics.ListCreateAPIView):
@@ -68,7 +84,11 @@ class ProjectListCreateApi(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         project = serializer.save()
-        ProjectMembership.objects.get_or_create(project=project, user=request.user)
+        ProjectMembership.objects.get_or_create(
+            project=project,
+            user=request.user,
+            defaults={"role": ProjectMembership.PROJECT_ROLE_ADMIN},
+        )
         return Response(
             {
                 "project_token": create_project_token(project),
@@ -126,7 +146,11 @@ class ProjectLoginApi(APIView):
                 {"detail": "Неверный логин или пароль проекта."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        ProjectMembership.objects.get_or_create(project=project, user=request.user)
+        ProjectMembership.objects.get_or_create(
+            project=project,
+            user=request.user,
+            defaults={"role": ProjectMembership.PROJECT_ROLE_MEMBER},
+        )
         return Response(
             {
                 "project_token": create_project_token(project),
@@ -148,6 +172,80 @@ class ProjectCurrentApi(APIView):
         return Response(ProjectSerializer(project, context={"request": request}).data)
 
 
+class ProjectMemberListApi(generics.ListAPIView):
+    serializer_class = ProjectMembershipSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        project = _get_active_project(self.request)
+        if not project:
+            return ProjectMembership.objects.none()
+        return ProjectMembership.objects.select_related("project", "user").filter(project=project)
+
+
+class ProjectMemberDetailApi(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ProjectMembershipSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = "user_id"
+    lookup_url_kwarg = "user_id"
+
+    def get_queryset(self):
+        project = _get_active_project(self.request)
+        if not project:
+            return ProjectMembership.objects.none()
+        return ProjectMembership.objects.select_related("project", "user").filter(project=project)
+
+    def update(self, request, *args, **kwargs):
+        project = _get_active_project(request)
+        if not project or not _is_project_admin(request.user, project):
+            return Response(
+                {"detail": "Недостаточно прав для изменения ролей проекта."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        membership = self.get_object()
+        new_role = request.data.get("role")
+        if new_role is None:
+            return Response({"role": "Укажите роль в проекте."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            new_role = float(new_role)
+        except (TypeError, ValueError):
+            return Response({"role": "Роль должна быть числом."}, status=status.HTTP_400_BAD_REQUEST)
+        if membership.is_project_admin() and new_role > ProjectMembership.PROJECT_ROLE_ADMIN:
+            admin_count = ProjectMembership.objects.filter(
+                project=project,
+                role__lte=ProjectMembership.PROJECT_ROLE_ADMIN,
+            ).count()
+            if admin_count <= 1:
+                return Response(
+                    {"detail": "В проекте должен остаться хотя бы один админ."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        membership.role = new_role
+        membership.save(update_fields=["role"])
+        return Response(ProjectMembershipSerializer(membership, context={"request": request}).data)
+
+    def destroy(self, request, *args, **kwargs):
+        project = _get_active_project(request)
+        if not project or not _is_project_admin(request.user, project):
+            return Response(
+                {"detail": "Недостаточно прав для удаления участников проекта."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        membership = self.get_object()
+        if membership.is_project_admin():
+            admin_count = ProjectMembership.objects.filter(
+                project=project,
+                role__lte=ProjectMembership.PROJECT_ROLE_ADMIN,
+            ).count()
+            if admin_count <= 1:
+                return Response(
+                    {"detail": "В проекте должен остаться хотя бы один админ."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        membership.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ProjectTaskListCreateApi(generics.ListCreateAPIView):
     serializer_class = ProjectTaskSerializer
     permission_classes = [IsAuthenticated]
@@ -167,7 +265,12 @@ class ProjectTaskListCreateApi(generics.ListCreateAPIView):
         return (
             ProjectTask.objects.select_related("project", "author", "assignee")
             .filter(project=project)
-            .filter(Q(author=self.request.user) | Q(assignee=self.request.user))
+            .filter(
+                Q(author=self.request.user)
+                | Q(assignee=self.request.user)
+                | Q(project__memberships__user=self.request.user, project__memberships__role__lte=ProjectMembership.PROJECT_ROLE_ADMIN)
+            )
+            .distinct()
         )
 
     def filter_queryset(self, queryset):
@@ -209,7 +312,11 @@ class ProjectTaskDetailApi(generics.RetrieveUpdateDestroyAPIView):
         return (
             ProjectTask.objects.select_related("project", "author", "assignee")
             .filter(project=project)
-            .filter(Q(author=self.request.user) | Q(assignee=self.request.user))
+            .filter(
+                Q(author=self.request.user)
+                | Q(assignee=self.request.user)
+                | Q(project__memberships__user=self.request.user, project__memberships__role__lte=ProjectMembership.PROJECT_ROLE_ADMIN)
+            )
             .distinct()
         )
 
@@ -235,7 +342,11 @@ class ProjectTaskCloseApi(APIView):
             pk=pk,
             project=project,
         )
-        if task.author_id != request.user.id and task.assignee_id != request.user.id:
+        if (
+            task.author_id != request.user.id
+            and task.assignee_id != request.user.id
+            and not _is_project_admin(request.user, project)
+        ):
             return Response(
                 {"detail": "Недостаточно прав для закрытия задачи."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -261,7 +372,7 @@ class ProjectTaskReopenApi(APIView):
             pk=pk,
             project=project,
         )
-        if task.author_id != request.user.id:
+        if task.author_id != request.user.id and not _is_project_admin(request.user, project):
             return Response(
                 {"detail": "Только автор задачи может открыть её заново."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -287,7 +398,11 @@ class ProjectTaskCarryOverApi(APIView):
             pk=pk,
             project=project,
         )
-        if task.author_id != request.user.id and task.assignee_id != request.user.id:
+        if (
+            task.author_id != request.user.id
+            and task.assignee_id != request.user.id
+            and not _is_project_admin(request.user, project)
+        ):
             return Response(
                 {"detail": "Недостаточно прав для переноса задачи."},
                 status=status.HTTP_403_FORBIDDEN,

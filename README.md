@@ -41,7 +41,7 @@ X-Project-Token: <project_token>
     "nickname": "ivan",
     "first_name": "Иван",
     "last_name": "Иванов",
-    "role": 1.0
+    "app_role": "user"
   }
 }
 ```
@@ -65,7 +65,7 @@ X-Project-Token: <project_token>
   "user": {
     "id": 1,
     "nickname": "ivan",
-    "role": 1.0
+    "app_role": "user"
   }
 }
 ```
@@ -92,7 +92,7 @@ X-Project-Token: <project_token>
   "last_name": "Иванов",
   "photo": null,
   "photo_url": null,
-  "role": 1.0,
+  "app_role": "user",
   "department": "",
   "job_title": "",
   "is_staff": false,
@@ -146,7 +146,7 @@ X-Project-Token: <project_token>
   {
     "id": 1,
     "nickname": "ivan",
-    "role": 1.0
+    "app_role": "user"
   }
 ]
 ```
@@ -159,7 +159,7 @@ X-Project-Token: <project_token>
   "password": "12345",
   "first_name": "User",
   "last_name": "Two",
-  "role": 10.0
+  "app_role": "user"
 }
 ```
 
@@ -187,6 +187,7 @@ X-Project-Token: <project_token>
     "image": null,
     "image_url": null,
     "description": "Рабочие задачи отдела",
+    "my_project_role": 1.0,
     "room_created_at": "2026-04-27T10:00:00Z"
   }
 ]
@@ -219,7 +220,7 @@ X-Project-Token: <project_token>
 }
 ```
 
-Создатель автоматически становится участником проекта. Вернувшийся `project_token` делает этот проект активным для задач.
+Создатель автоматически становится участником проекта с ролью `1.0` - админ проекта. Вернувшийся `project_token` делает этот проект активным для задач.
 
 ### Войти в проект / присоединиться
 
@@ -234,7 +235,7 @@ X-Project-Token: <project_token>
 }
 ```
 
-Если пароль верный, пользователь добавляется в участники проекта. Один пользователь может состоять в нескольких проектах.
+Если пароль верный, пользователь добавляется в участники проекта с ролью `10.0` - обычный участник. Один пользователь может состоять в нескольких проектах.
 
 Ответ:
 
@@ -256,6 +257,50 @@ X-Project-Token: <project_token>
 Нужен `X-Project-Token`. Токен определяет активный проект текущей сессии.
 
 Ответ: объект проекта.
+
+### Участники активного проекта
+
+`GET /api/calendar/projects/current/members/`
+
+Нужен `X-Project-Token`.
+
+Ответ:
+
+```json
+[
+  {
+    "id": 1,
+    "project": 1,
+    "user": 1,
+    "user_nickname": "ivan",
+    "user_full_name": "Иван Иванов",
+    "role": 1.0,
+    "joined_at": "2026-04-27T10:00:00Z"
+  }
+]
+```
+
+### Изменить роль участника
+
+`PATCH /api/calendar/projects/current/members/<user_id>/`
+
+Доступно только админу проекта. В проекте должен остаться хотя бы один админ.
+
+```json
+{
+  "role": 10.0
+}
+```
+
+Ответ: обновленный участник проекта.
+
+### Удалить участника
+
+`DELETE /api/calendar/projects/current/members/<user_id>/`
+
+Доступно только админу проекта. Нельзя удалить последнего админа проекта.
+
+Ответ: `204 No Content`.
 
 ### Получить проект
 
@@ -286,6 +331,8 @@ X-Project-Token: <project_token>
 ## Задачи проекта
 
 Для всех запросов нужен `Authorization` и `X-Project-Token`. Смотреть и ставить задачи можно только в активном проекте из `project_token`.
+
+Назначать задачи можно участникам с такой же или большей числовой ролью проекта: `2.0 -> 10.0` можно, `10.0 -> 2.0` нельзя.
 
 ### Список задач
 
@@ -434,7 +481,7 @@ X-Project-Token: <project_token>
   "nickname": "manager",
   "password": "12345",
   "first_name": "Manager",
-  "role": 2.0,
+  "app_role": "admin",
   "is_staff": true,
   "is_active": true
 }
@@ -457,7 +504,7 @@ X-Project-Token: <project_token>
   "nickname": "manager",
   "first_name": "Manager",
   "last_name": "",
-  "role": 2.0,
+  "app_role": "admin",
   "department": "Управление",
   "job_title": "Manager",
   "is_staff": true,

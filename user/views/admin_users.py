@@ -14,7 +14,7 @@ from ..serializers import AdminUserSerializer
 
 
 def _is_superadmin(user: User) -> bool:
-    return bool(user.is_superuser or user.role == 0.0)
+    return bool(user.is_superadmin())
 
 
 def _can_manage_target(actor: User, target: User) -> bool:
@@ -22,7 +22,10 @@ def _can_manage_target(actor: User, target: User) -> bool:
         return True
     if target.pk == actor.pk:
         return True
-    if actor.role == 1.0 and target.role in (0.0, 1.0):
+    if actor.app_role == User.APP_ROLE_ADMIN and target.app_role in (
+        User.APP_ROLE_SUPERADMIN,
+        User.APP_ROLE_ADMIN,
+    ):
         return False
     return True
 
@@ -40,7 +43,7 @@ class AdminUserListCreateApi(APIView):
     def get(self, request):
         qs = User.objects.all().order_by("nickname")
         q = (request.query_params.get("q") or "").strip()
-        role = (request.query_params.get("role") or "").strip()
+        role = (request.query_params.get("role") or request.query_params.get("app_role") or "").strip()
         job_title = (request.query_params.get("job_title") or "").strip()
         department = (request.query_params.get("department") or "").strip()
 
@@ -51,8 +54,8 @@ class AdminUserListCreateApi(APIView):
                 | Q(last_name__icontains=q)
                 | Q(department__icontains=q)
             )
-        if role in ("0", "1", "0.0", "1.0"):
-            qs = qs.filter(role=float(role))
+        if role in dict(User.APP_ROLE_CHOICES):
+            qs = qs.filter(app_role=role)
         if job_title:
             qs = qs.filter(job_title__icontains=job_title)
         if department:
@@ -167,8 +170,8 @@ def admin_user_reset_password(request, pk: int):
 @permission_classes([IsAuthenticated, IsStaffWithAdminRole])
 def admin_stats(request):
     total = User.objects.count()
-    superadmins = User.objects.filter(role=0.0).count()
-    admins = User.objects.filter(role=1.0).count()
+    superadmins = User.objects.filter(app_role=User.APP_ROLE_SUPERADMIN).count()
+    admins = User.objects.filter(app_role=User.APP_ROLE_ADMIN).count()
     return Response(
         {
             "total_users": total,

@@ -12,7 +12,8 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(ProjectMembership)
 class ProjectMembershipAdmin(admin.ModelAdmin):
-    list_display = ("project", "user", "joined_at")
+    list_display = ("project", "user", "role", "joined_at")
+    list_filter = ("role",)
     search_fields = ("project__login", "project__title", "user__nickname")
     autocomplete_fields = ("project", "user")
 
