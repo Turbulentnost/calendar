@@ -1,7 +1,8 @@
 from django.contrib.auth import authenticate
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -74,6 +75,25 @@ def me(request):
     )
     serializer.is_valid(raise_exception=True)
     serializer.save()
+    return Response(UserReadSerializer(request.user, context={"request": request}).data)
+
+
+@api_view(["POST", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+@parser_classes([MultiPartParser, FormParser])
+def me_photo(request):
+    if request.method == "DELETE":
+        if request.user.photo:
+            request.user.photo.delete(save=False)
+        request.user.photo = None
+        request.user.save(update_fields=["photo"])
+        return Response(UserReadSerializer(request.user, context={"request": request}).data)
+
+    photo = request.FILES.get("photo")
+    if not photo:
+        return Response({"photo": "Передайте файл в поле photo."}, status=status.HTTP_400_BAD_REQUEST)
+    request.user.photo = photo
+    request.user.save(update_fields=["photo"])
     return Response(UserReadSerializer(request.user, context={"request": request}).data)
 
 

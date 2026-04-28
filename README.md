@@ -116,6 +116,43 @@ X-Project-Token: <project_token>
 
 Ответ: объект текущего пользователя.
 
+### Загрузить фото профиля
+
+`POST /api/v1/auth/me/photo/`
+
+Формат: `multipart/form-data`
+
+```text
+photo=<image-file>
+```
+
+Ответ:
+
+```json
+{
+  "id": 1,
+  "nickname": "ivan",
+  "photo": "/media/users/photos/avatar.jpg",
+  "photo_url": "http://<host>/media/users/photos/avatar.jpg"
+}
+```
+
+### Заменить фото профиля
+
+`PATCH /api/v1/auth/me/photo/`
+
+Формат: `multipart/form-data`, поле `photo`.
+
+Ответ: объект текущего пользователя.
+
+### Удалить фото профиля
+
+`DELETE /api/v1/auth/me/photo/`
+
+Тело не требуется.
+
+Ответ: объект текущего пользователя с `photo: null`.
+
 ### Сменить пароль
 
 `POST /api/v1/auth/change-password/`
