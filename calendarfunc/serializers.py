@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from user.permissions import can_assign_to_user
 
-from .models import Project, ProjectTask
+from .models import Project, ProjectMembership, ProjectTask
 
 User = get_user_model()
 
@@ -146,6 +146,10 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         actor = self.context["request"].user
         assignee = attrs.get("assignee", getattr(self.instance, "assignee", None))
 
+        if not ProjectMembership.objects.filter(project=project, user=actor).exists():
+            raise serializers.ValidationError("Вы не состоите в этом проекте.")
+        if assignee and not ProjectMembership.objects.filter(project=project, user=assignee).exists():
+            raise serializers.ValidationError({"assignee": "Пользователь не состоит в этом проекте."})
         if assignee and not can_assign_to_user(actor, assignee):
             raise serializers.ValidationError(
                 {"assignee": "Недостаточно прав для постановки задачи этому пользователю."}

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Project, ProjectTask
+from .models import Project, ProjectMembership, ProjectTask
 
 
 @admin.register(Project)
@@ -8,6 +8,13 @@ class ProjectAdmin(admin.ModelAdmin):
     list_display = ("login", "title", "creator", "name", "room_created_at")
     search_fields = ("login", "title", "name", "description", "creator__nickname")
     autocomplete_fields = ("creator",)
+
+
+@admin.register(ProjectMembership)
+class ProjectMembershipAdmin(admin.ModelAdmin):
+    list_display = ("project", "user", "joined_at")
+    search_fields = ("project__login", "project__title", "user__nickname")
+    autocomplete_fields = ("project", "user")
 
 
 @admin.register(ProjectTask)

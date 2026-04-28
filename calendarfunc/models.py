@@ -38,6 +38,31 @@ class Project(models.Model):
         return check_password(raw_password, self.password_hash)
 
 
+class ProjectMembership(models.Model):
+    project = models.ForeignKey(
+        Project,
+        related_name="memberships",
+        on_delete=models.CASCADE,
+        verbose_name="Проект",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="project_memberships",
+        on_delete=models.CASCADE,
+        verbose_name="Пользователь",
+    )
+    joined_at = models.DateTimeField("Дата входа в проект", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "участник проекта"
+        verbose_name_plural = "участники проектов"
+        unique_together = ("project", "user")
+        ordering = ["-joined_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user} -> {self.project}"
+
+
 class ProjectTask(models.Model):
     STATUS_NEW = "new"
     STATUS_IN_PROGRESS = "in_progress"

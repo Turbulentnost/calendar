@@ -15,6 +15,7 @@ from .views import (
 urlpatterns = [
     path("projects/", ProjectListCreateApi.as_view(), name="calendar-projects-list-create"),
     path("projects/login/", ProjectLoginApi.as_view(), name="calendar-projects-login"),
+    path("projects/join/", ProjectLoginApi.as_view(), name="calendar-projects-join"),
     path("projects/current/", ProjectCurrentApi.as_view(), name="calendar-projects-current"),
     path("projects/<int:pk>/", ProjectDetailApi.as_view(), name="calendar-projects-detail"),
     path("tasks/", ProjectTaskListCreateApi.as_view(), name="calendar-projects-tasks-list-create"),

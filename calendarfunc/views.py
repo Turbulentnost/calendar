@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Project, ProjectTask
+from .models import Project, ProjectMembership, ProjectTask
 from .serializers import ProjectLoginSerializer, ProjectSerializer, ProjectTaskSerializer
 from .tokens import create_project_token, decode_project_token
 
@@ -30,6 +30,19 @@ def _get_project_from_token(request) -> Project:
     return Project.objects.filter(pk=payload["project_id"]).first()
 
 
+def _is_project_member(user, project: Project) -> bool:
+    if not user or not user.is_authenticated or not project:
+        return False
+    return ProjectMembership.objects.filter(project=project, user=user).exists()
+
+
+def _get_active_project(request) -> Project:
+    project = _get_project_from_token(request)
+    if not _is_project_member(request.user, project):
+        return None
+    return project
+
+
 def _can_manage_project(user, project: Project) -> bool:
     return bool(user.is_superuser or project.creator_id == user.id)
 
@@ -40,7 +53,11 @@ class ProjectListCreateApi(generics.ListCreateAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return Project.objects.select_related("creator").filter(creator=self.request.user)
+        return (
+            Project.objects.select_related("creator")
+            .filter(memberships__user=self.request.user)
+            .distinct()
+        )
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -51,6 +68,7 @@ class ProjectListCreateApi(generics.ListCreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         project = serializer.save()
+        ProjectMembership.objects.get_or_create(project=project, user=request.user)
         return Response(
             {
                 "project_token": create_project_token(project),
@@ -66,7 +84,11 @@ class ProjectDetailApi(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        return Project.objects.select_related("creator").filter(creator=self.request.user)
+        return (
+            Project.objects.select_related("creator")
+            .filter(memberships__user=self.request.user)
+            .distinct()
+        )
 
     def update(self, request, *args, **kwargs):
         project = self.get_object()
@@ -104,6 +126,7 @@ class ProjectLoginApi(APIView):
                 {"detail": "Неверный логин или пароль проекта."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        ProjectMembership.objects.get_or_create(project=project, user=request.user)
         return Response(
             {
                 "project_token": create_project_token(project),
@@ -116,7 +139,7 @@ class ProjectCurrentApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        project = _get_project_from_token(request)
+        project = _get_active_project(request)
         if not project:
             return Response(
                 {"detail": "Укажите корректный токен проекта."},
@@ -131,7 +154,7 @@ class ProjectTaskListCreateApi(generics.ListCreateAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_project(self):
-        project = _get_project_from_token(self.request)
+        project = _get_active_project(self.request)
         if not project:
             raise PermissionDenied("Укажите корректный токен проекта.")
         return project
@@ -180,7 +203,7 @@ class ProjectTaskDetailApi(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
-        project = _get_project_from_token(self.request)
+        project = _get_active_project(self.request)
         if not project:
             return ProjectTask.objects.none()
         return (
@@ -201,7 +224,7 @@ class ProjectTaskCloseApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk: int):
-        project = _get_project_from_token(request)
+        project = _get_active_project(request)
         if not project:
             return Response(
                 {"detail": "Укажите корректный токен проекта."},
@@ -227,7 +250,7 @@ class ProjectTaskReopenApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk: int):
-        project = _get_project_from_token(request)
+        project = _get_active_project(request)
         if not project:
             return Response(
                 {"detail": "Укажите корректный токен проекта."},
@@ -253,7 +276,7 @@ class ProjectTaskCarryOverApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk: int):
-        project = _get_project_from_token(request)
+        project = _get_active_project(request)
         if not project:
             return Response(
                 {"detail": "Укажите корректный токен проекта."},

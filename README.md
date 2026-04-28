@@ -20,34 +20,14 @@ X-Project-Token: <project_token>
 
 `POST /api/v1/auth/register/`
 
-Создать пользователя и новый проект:
+Регистрация создает только аккаунт пользователя. Проект создается или выбирается отдельным запросом после входа.
 
 ```json
 {
   "nickname": "ivan",
   "password": "12345",
   "first_name": "Иван",
-  "last_name": "Иванов",
-  "project_action": "create_project",
-  "project": {
-    "login": "main-office",
-    "password": "project-pass",
-    "title": "Основной проект",
-    "name": "Комната офиса",
-    "description": "Рабочие задачи отдела"
-  }
-}
-```
-
-Создать пользователя и войти в существующий проект:
-
-```json
-{
-  "nickname": "petr",
-  "password": "12345",
-  "project_action": "join_project",
-  "project_login": "main-office",
-  "project_password": "project-pass"
+  "last_name": "Иванов"
 }
 ```
 
@@ -56,18 +36,12 @@ X-Project-Token: <project_token>
 ```json
 {
   "token": "user-token",
-  "project_token": "project-jwt",
   "user": {
     "id": 1,
     "nickname": "ivan",
     "first_name": "Иван",
     "last_name": "Иванов",
     "role": 1.0
-  },
-  "project": {
-    "id": 1,
-    "login": "main-office",
-    "title": "Основной проект"
   }
 }
 ```
@@ -193,9 +167,11 @@ X-Project-Token: <project_token>
 
 ## Проекты
 
-### Список проектов, созданных пользователем
+### Список проектов пользователя
 
 `GET /api/calendar/projects/`
+
+Возвращает проекты, в которых состоит текущий пользователь.
 
 Ответ:
 
@@ -243,9 +219,13 @@ X-Project-Token: <project_token>
 }
 ```
 
-### Войти в проект
+Создатель автоматически становится участником проекта. Вернувшийся `project_token` делает этот проект активным для задач.
+
+### Войти в проект / присоединиться
 
 `POST /api/calendar/projects/login/`
+
+Альтернативный endpoint: `POST /api/calendar/projects/join/`
 
 ```json
 {
@@ -253,6 +233,8 @@ X-Project-Token: <project_token>
   "password": "project-pass"
 }
 ```
+
+Если пароль верный, пользователь добавляется в участники проекта. Один пользователь может состоять в нескольких проектах.
 
 Ответ:
 
@@ -271,7 +253,7 @@ X-Project-Token: <project_token>
 
 `GET /api/calendar/projects/current/`
 
-Нужен `X-Project-Token`.
+Нужен `X-Project-Token`. Токен определяет активный проект текущей сессии.
 
 Ответ: объект проекта.
 
@@ -303,7 +285,7 @@ X-Project-Token: <project_token>
 
 ## Задачи проекта
 
-Для всех запросов нужен `Authorization` и `X-Project-Token`.
+Для всех запросов нужен `Authorization` и `X-Project-Token`. Смотреть и ставить задачи можно только в активном проекте из `project_token`.
 
 ### Список задач
 
