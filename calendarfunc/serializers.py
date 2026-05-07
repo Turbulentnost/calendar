@@ -90,6 +90,38 @@ class ProjectSerializer(serializers.ModelSerializer):
         return instance
 
 
+class AdminProjectSerializer(serializers.ModelSerializer):
+    creator_nickname = serializers.CharField(source="creator.nickname", read_only=True)
+    members_count = serializers.IntegerField(read_only=True)
+    tasks_count = serializers.IntegerField(read_only=True)
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Project
+        fields = (
+            "id",
+            "login",
+            "title",
+            "creator",
+            "creator_nickname",
+            "room_created_at",
+            "name",
+            "image",
+            "image_url",
+            "description",
+            "members_count",
+            "tasks_count",
+        )
+        read_only_fields = fields
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+        return None
+
+
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     user_nickname = serializers.CharField(source="user.nickname", read_only=True)
     user_full_name = serializers.CharField(source="user.get_full_name", read_only=True)

@@ -230,6 +230,32 @@ photo=<image-file>
 ]
 ```
 
+### Список всех проектов
+
+`GET /api/calendar/projects/all/`
+
+Возвращает все проекты, которые есть в системе. Используется для общего каталога проектов перед входом по паролю.
+
+Ответ:
+
+```json
+[
+  {
+    "id": 1,
+    "login": "main-office",
+    "title": "Основной проект",
+    "creator": 1,
+    "creator_nickname": "ivan",
+    "name": "Комната офиса",
+    "image": null,
+    "image_url": null,
+    "description": "Рабочие задачи отдела",
+    "my_project_role": null,
+    "room_created_at": "2026-04-27T10:00:00Z"
+  }
+]
+```
+
 ### Создать проект
 
 `POST /api/calendar/projects/`

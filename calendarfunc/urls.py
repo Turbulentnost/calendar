@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    AdminProjectListApi,
+    ProjectCatalogListApi,
     ProjectCurrentApi,
     ProjectMemberDetailApi,
     ProjectMemberListApi,
@@ -15,7 +17,9 @@ from .views import (
 )
 
 urlpatterns = [
+    path("admin/projects/", AdminProjectListApi.as_view(), name="calendar-admin-projects"),
     path("projects/", ProjectListCreateApi.as_view(), name="calendar-projects-list-create"),
+    path("projects/all/", ProjectCatalogListApi.as_view(), name="calendar-projects-all"),
     path("projects/login/", ProjectLoginApi.as_view(), name="calendar-projects-login"),
     path("projects/join/", ProjectLoginApi.as_view(), name="calendar-projects-join"),
     path("projects/current/", ProjectCurrentApi.as_view(), name="calendar-projects-current"),

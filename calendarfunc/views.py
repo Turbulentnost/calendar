@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
@@ -10,11 +10,13 @@ from rest_framework.views import APIView
 
 from .models import Project, ProjectMembership, ProjectTask
 from .serializers import (
+    AdminProjectSerializer,
     ProjectLoginSerializer,
     ProjectMembershipSerializer,
     ProjectSerializer,
     ProjectTaskSerializer,
 )
+from user.permissions import IsStaffWithAdminRole
 from .tokens import create_project_token, decode_project_token
 
 
@@ -96,6 +98,39 @@ class ProjectListCreateApi(generics.ListCreateAPIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class ProjectCatalogListApi(generics.ListAPIView):
+    serializer_class = ProjectSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Project.objects.select_related("creator").all()
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
+
+
+class AdminProjectListApi(generics.ListAPIView):
+    serializer_class = AdminProjectSerializer
+    permission_classes = [IsAuthenticated, IsStaffWithAdminRole]
+
+    def get_queryset(self):
+        return (
+            Project.objects.select_related("creator")
+            .annotate(
+                members_count=Count("memberships", distinct=True),
+                tasks_count=Count("tasks", distinct=True),
+            )
+            .order_by("-room_created_at")
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
 
 
 class ProjectDetailApi(generics.RetrieveUpdateDestroyAPIView):
