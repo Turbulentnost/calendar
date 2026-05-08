@@ -5,6 +5,7 @@ from .views import (
     ProjectCatalogListApi,
     ProjectCurrentApi,
     ProjectInviteApi,
+    ProjectLeaveApi,
     ProjectMemberDetailApi,
     ProjectMemberListApi,
     ProjectNotificationListApi,
@@ -26,6 +27,7 @@ urlpatterns = [
     path("projects/join/", ProjectLoginApi.as_view(), name="calendar-projects-join"),
     path("projects/current/", ProjectCurrentApi.as_view(), name="calendar-projects-current"),
     path("projects/current/invite/", ProjectInviteApi.as_view(), name="calendar-projects-invite"),
+    path("projects/current/leave/", ProjectLeaveApi.as_view(), name="calendar-projects-leave"),
     path("projects/current/members/", ProjectMemberListApi.as_view(), name="calendar-projects-members"),
     path("notifications/", ProjectNotificationListApi.as_view(), name="calendar-notifications"),
     path(

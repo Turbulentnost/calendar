@@ -298,6 +298,31 @@ class ProjectMemberListApi(generics.ListAPIView):
         return ProjectMembership.objects.select_related("project", "user").filter(project=project)
 
 
+class ProjectLeaveApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        project = _get_active_project(request)
+        membership = _get_membership(request.user, project)
+        if not project or not membership:
+            return Response(
+                {"detail": "Активный проект не найден."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        members_count = ProjectMembership.objects.filter(project=project).count()
+        admin_count = ProjectMembership.objects.filter(
+            project=project,
+            role__lte=ProjectMembership.PROJECT_ROLE_ADMIN,
+        ).count()
+        if membership.is_project_admin() and admin_count <= 1 and members_count > 1:
+            return Response(
+                {"detail": "Перед выходом назначьте другого администратора проекта."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        membership.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ProjectMemberDetailApi(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProjectMembershipSerializer
     permission_classes = [IsAuthenticated]
