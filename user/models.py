@@ -82,3 +82,39 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def is_admin_role(self) -> bool:
         return self.app_role in (self.APP_ROLE_SUPERADMIN, self.APP_ROLE_ADMIN) or self.is_superuser
+
+
+class PushDeviceToken(models.Model):
+    PLATFORM_ANDROID = "android"
+    PLATFORM_IOS = "ios"
+    PLATFORM_WEB = "web"
+    PLATFORM_CHOICES = (
+        (PLATFORM_ANDROID, "Android"),
+        (PLATFORM_IOS, "iOS"),
+        (PLATFORM_WEB, "Web"),
+    )
+
+    user = models.ForeignKey(
+        User,
+        related_name="push_device_tokens",
+        on_delete=models.CASCADE,
+        verbose_name="Пользователь",
+    )
+    token = models.CharField("Device token", max_length=512, unique=True)
+    platform = models.CharField(
+        "Платформа",
+        max_length=20,
+        choices=PLATFORM_CHOICES,
+        default=PLATFORM_ANDROID,
+    )
+    is_active = models.BooleanField("Активен", default=True)
+    created_at = models.DateTimeField("Создан", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлен", auto_now=True)
+
+    class Meta:
+        verbose_name = "push token устройства"
+        verbose_name_plural = "push tokens устройств"
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"{self.user} {self.platform}"

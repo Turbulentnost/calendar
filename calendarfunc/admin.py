@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Project, ProjectMembership, ProjectTask
+from .models import Project, ProjectMembership, ProjectNotification, ProjectTask
 
 
 @admin.register(Project)
@@ -41,4 +41,12 @@ class ProjectTaskAdmin(admin.ModelAdmin):
         "assignee__nickname",
     )
     autocomplete_fields = ("project", "author", "assignee")
+
+
+@admin.register(ProjectNotification)
+class ProjectNotificationAdmin(admin.ModelAdmin):
+    list_display = ("title", "project", "recipient", "sender", "is_read", "created_at")
+    list_filter = ("notification_type", "is_read", "created_at")
+    search_fields = ("title", "message", "project__title", "recipient__nickname", "sender__nickname")
+    autocomplete_fields = ("project", "recipient", "sender")
 

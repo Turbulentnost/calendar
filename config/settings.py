@@ -110,4 +110,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+FCM_SERVER_KEY = os.environ.get("FCM_SERVER_KEY", "")
+FCM_LEGACY_URL = os.environ.get("FCM_LEGACY_URL", "https://fcm.googleapis.com/fcm/send")
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

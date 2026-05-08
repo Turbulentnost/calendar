@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import User
+from .models import PushDeviceToken, User
 
 
 class UserReadSerializer(serializers.ModelSerializer):
@@ -131,3 +131,16 @@ class AdminUserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+
+
+class PushDeviceTokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushDeviceToken
+        fields = ("id", "token", "platform", "is_active", "created_at", "updated_at")
+        read_only_fields = ("id", "is_active", "created_at", "updated_at")
+
+    def validate_token(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("Передайте device token.")
+        return value

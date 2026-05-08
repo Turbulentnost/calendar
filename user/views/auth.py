@@ -6,8 +6,8 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import User
-from ..serializers import UserProfileUpdateSerializer, UserReadSerializer
+from ..models import PushDeviceToken, User
+from ..serializers import PushDeviceTokenSerializer, UserProfileUpdateSerializer, UserReadSerializer
 
 
 @api_view(["POST"])
@@ -102,6 +102,24 @@ def me_photo(request):
 def logout(request):
     Token.objects.filter(user=request.user).delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def device_token(request):
+    serializer = PushDeviceTokenSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    token_value = serializer.validated_data["token"]
+    platform = serializer.validated_data.get("platform") or PushDeviceToken.PLATFORM_ANDROID
+    token, _ = PushDeviceToken.objects.update_or_create(
+        token=token_value,
+        defaults={
+            "user": request.user,
+            "platform": platform,
+            "is_active": True,
+        },
+    )
+    return Response(PushDeviceTokenSerializer(token).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])

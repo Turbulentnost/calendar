@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
-from .models import User
+from .models import PushDeviceToken, User
 
 
 @admin.register(User)
@@ -50,3 +50,11 @@ class UserAdmin(BaseUserAdmin):
     )
     readonly_fields = ("date_joined", "last_login")
     filter_horizontal = ("groups", "user_permissions")
+
+
+@admin.register(PushDeviceToken)
+class PushDeviceTokenAdmin(admin.ModelAdmin):
+    list_display = ("user", "platform", "is_active", "updated_at")
+    list_filter = ("platform", "is_active")
+    search_fields = ("user__nickname", "token")
+    autocomplete_fields = ("user",)

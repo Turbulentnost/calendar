@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Project, ProjectMembership, ProjectTask
+from .models import Project, ProjectMembership, ProjectNotification, ProjectTask
 
 User = get_user_model()
 
@@ -145,6 +145,29 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
             "user_full_name",
             "joined_at",
         )
+
+
+class ProjectNotificationSerializer(serializers.ModelSerializer):
+    sender_nickname = serializers.CharField(source="sender.nickname", read_only=True)
+    project_title = serializers.CharField(source="project.title", read_only=True)
+
+    class Meta:
+        model = ProjectNotification
+        fields = (
+            "id",
+            "notification_type",
+            "title",
+            "message",
+            "project_login",
+            "project_password",
+            "project",
+            "project_title",
+            "sender",
+            "sender_nickname",
+            "is_read",
+            "created_at",
+        )
+        read_only_fields = fields
 
 
 class ProjectLoginSerializer(serializers.Serializer):

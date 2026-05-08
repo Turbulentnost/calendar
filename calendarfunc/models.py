@@ -70,6 +70,52 @@ class ProjectMembership(models.Model):
         return self.role <= self.PROJECT_ROLE_ADMIN
 
 
+class ProjectNotification(models.Model):
+    TYPE_INVITATION = "project_invitation"
+    TYPE_CHOICES = (
+        (TYPE_INVITATION, "Приглашение в проект"),
+    )
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="project_notifications",
+        on_delete=models.CASCADE,
+        verbose_name="Получатель",
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="sent_project_notifications",
+        on_delete=models.CASCADE,
+        verbose_name="Отправитель",
+    )
+    project = models.ForeignKey(
+        Project,
+        related_name="notifications",
+        on_delete=models.CASCADE,
+        verbose_name="Проект",
+    )
+    notification_type = models.CharField(
+        "Тип уведомления",
+        max_length=40,
+        choices=TYPE_CHOICES,
+        default=TYPE_INVITATION,
+    )
+    title = models.CharField("Заголовок", max_length=255)
+    message = models.TextField("Сообщение", blank=True)
+    project_login = models.CharField("Логин проекта в приглашении", max_length=150, blank=True)
+    project_password = models.CharField("Пароль проекта в приглашении", max_length=255, blank=True)
+    is_read = models.BooleanField("Прочитано", default=False)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "уведомление проекта"
+        verbose_name_plural = "уведомления проектов"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class ProjectTask(models.Model):
     STATUS_NEW = "new"
     STATUS_IN_PROGRESS = "in_progress"

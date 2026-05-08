@@ -153,6 +153,30 @@ photo=<image-file>
 
 Ответ: объект текущего пользователя с `photo: null`.
 
+### Зарегистрировать device token
+
+`POST /api/v1/auth/device-token/`
+
+Нужен auth token пользователя. Backend использует этот токен для push-уведомлений на устройство.
+
+```json
+{
+  "token": "fcm-device-token",
+  "platform": "android"
+}
+```
+
+Ответ:
+
+```json
+{
+  "id": 1,
+  "token": "fcm-device-token",
+  "platform": "android",
+  "is_active": true
+}
+```
+
 ### Сменить пароль
 
 `POST /api/v1/auth/change-password/`
@@ -201,6 +225,27 @@ photo=<image-file>
 ```
 
 Ответ: созданный пользователь.
+
+### Поиск пользователей
+
+`GET /api/v1/users/search/?q=ivan`
+
+Возвращает активных пользователей для приглашений в проект, кроме текущего пользователя.
+
+Ответ:
+
+```json
+{
+  "results": [
+    {
+      "id": 2,
+      "nickname": "ivan",
+      "first_name": "Иван",
+      "photo_url": null
+    }
+  ]
+}
+```
 
 ## Проекты
 
@@ -260,6 +305,8 @@ photo=<image-file>
 
 `POST /api/calendar/projects/`
 
+Можно отправлять как `application/json`, так и `multipart/form-data` с полем `image`.
+
 ```json
 {
   "login": "main-office",
@@ -284,6 +331,55 @@ photo=<image-file>
 ```
 
 Создатель автоматически становится участником проекта с ролью `1.0` - админ проекта. Вернувшийся `project_token` делает этот проект активным для задач.
+
+### Пригласить пользователя в активный проект
+
+`POST /api/calendar/projects/current/invite/`
+
+Нужен `X-Project-Token`. Доступно админу проекта. Создаёт уведомление-приглашение и сразу отправляет push на сохранённые device tokens пользователя. `project_login` и `project_password` обязательны.
+
+```json
+{
+  "user_id": 2,
+  "project_login": "main-office",
+  "project_password": "project-pass"
+}
+```
+
+Ответ:
+
+```json
+{
+  "id": 1,
+  "notification_type": "project_invitation",
+  "title": "Приглашение в проект Основной проект",
+  "message": "ivan приглашает вас в проект Основной проект. Логин: main-office. Пароль: project-pass.",
+  "project_login": "main-office",
+  "project_password": "project-pass",
+  "project": 1,
+  "sender": 1,
+  "is_read": false,
+  "push_sent": 1
+}
+```
+
+### Уведомления пользователя
+
+`GET /api/calendar/notifications/`
+
+Возвращает уведомления текущего пользователя, включая приглашения в проекты.
+
+`DELETE /api/calendar/notifications/`
+
+Удаляет все уведомления текущего пользователя из базы.
+
+Ответ:
+
+```json
+{
+  "deleted": 3
+}
+```
 
 ### Войти в проект / присоединиться
 

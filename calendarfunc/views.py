@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
@@ -13,11 +14,13 @@ from .serializers import (
     AdminProjectSerializer,
     ProjectLoginSerializer,
     ProjectMembershipSerializer,
+    ProjectNotificationSerializer,
     ProjectSerializer,
     ProjectTaskSerializer,
 )
 from user.permissions import IsStaffWithAdminRole
 from .tokens import create_project_token, decode_project_token
+from .services import create_project_invitation_notification, send_project_invitation_push
 
 
 def _get_project_token(request) -> str:
@@ -205,6 +208,83 @@ class ProjectCurrentApi(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return Response(ProjectSerializer(project, context={"request": request}).data)
+
+
+class ProjectInviteApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        project = _get_active_project(request)
+        if not project or not _is_project_admin(request.user, project):
+            return Response(
+                {"detail": "Недостаточно прав для приглашения пользователей."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return Response({"user_id": "Укажите пользователя."}, status=status.HTTP_400_BAD_REQUEST)
+        project_login = (request.data.get("project_login") or "").strip()
+        project_password = request.data.get("project_password") or ""
+        if not project_login:
+            return Response({"project_login": "Укажите логин проекта."}, status=status.HTTP_400_BAD_REQUEST)
+        if not project_password:
+            return Response({"project_password": "Укажите пароль проекта."}, status=status.HTTP_400_BAD_REQUEST)
+        user_model = ProjectMembership._meta.get_field("user").remote_field.model
+        recipient = get_object_or_404(user_model, pk=user_id)
+        if ProjectMembership.objects.filter(project=project, user=recipient).exists():
+            return Response(
+                {"detail": "Пользователь уже состоит в проекте."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        notification = create_project_invitation_notification(
+            project=project,
+            sender=request.user,
+            recipient=recipient,
+            project_login=project_login,
+            project_password=project_password,
+        )
+        push_sent = send_project_invitation_push(notification)
+        data = ProjectNotificationSerializer(notification, context={"request": request}).data
+        data["push_sent"] = push_sent
+        return Response(
+            data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProjectNotificationListApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self, request):
+        return (
+            request.user.project_notifications
+            .select_related("project", "sender")
+            .all()
+        )
+
+    def get(self, request):
+        try:
+            serializer = ProjectNotificationSerializer(
+                self.get_queryset(request),
+                many=True,
+                context={"request": request},
+            )
+            return Response(serializer.data)
+        except (OperationalError, ProgrammingError):
+            return Response(
+                {"detail": "Таблица уведомлений ещё не создана. Примените миграции backend."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+    def delete(self, request):
+        try:
+            deleted_count, _ = self.get_queryset(request).delete()
+            return Response({"deleted": deleted_count})
+        except (OperationalError, ProgrammingError):
+            return Response(
+                {"detail": "Таблица уведомлений ещё не создана. Примените миграции backend."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 
 class ProjectMemberListApi(generics.ListAPIView):
