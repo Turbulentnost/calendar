@@ -5,7 +5,7 @@ import json
 from urllib import request as urlrequest
 from urllib.error import URLError, HTTPError
 
-from .models import Project, ProjectNotification, ProjectTask
+from .models import Project, ProjectActivity, ProjectDailyStatistics, ProjectNotification, ProjectTask
 
 
 def rollover_overdue_project_tasks(today=None) -> int:
@@ -96,3 +96,38 @@ def send_project_invitation_push(notification: ProjectNotification) -> int:
         except (HTTPError, URLError, TimeoutError):
             continue
     return sent
+
+
+def log_project_activity(*, project: Project, actor, activity_type: str, message: str, task=None) -> ProjectActivity:
+    return ProjectActivity.objects.create(
+        project=project,
+        actor=actor,
+        task=task,
+        activity_type=activity_type,
+        message=message,
+    )
+
+
+def sync_project_daily_statistics(project: Project, date=None) -> ProjectDailyStatistics:
+    date = date or timezone.localdate()
+    tasks = ProjectTask.objects.filter(project=project, date_from__lte=date, date_to__gte=date)
+    completed_count = tasks.filter(status=ProjectTask.STATUS_DONE).count()
+    in_progress_count = tasks.filter(status=ProjectTask.STATUS_IN_PROGRESS).count()
+    overdue_count = ProjectTask.objects.filter(
+        project=project,
+        date_to__lt=date,
+        is_closed=False,
+    ).exclude(status=ProjectTask.STATUS_DONE).count()
+    total = tasks.count()
+    productivity_percent = round((completed_count / total) * 100) if total else 0
+    statistics, _ = ProjectDailyStatistics.objects.update_or_create(
+        project=project,
+        date=date,
+        defaults={
+            "completed_count": completed_count,
+            "in_progress_count": in_progress_count,
+            "overdue_count": overdue_count,
+            "productivity_percent": productivity_percent,
+        },
+    )
+    return statistics

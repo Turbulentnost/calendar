@@ -116,6 +116,81 @@ class ProjectNotification(models.Model):
         return self.title
 
 
+class ProjectDailyStatistics(models.Model):
+    project = models.ForeignKey(
+        Project,
+        related_name="daily_statistics",
+        on_delete=models.CASCADE,
+        verbose_name="Проект",
+    )
+    date = models.DateField("Дата")
+    completed_count = models.PositiveIntegerField("Выполнено", default=0)
+    in_progress_count = models.PositiveIntegerField("В работе", default=0)
+    overdue_count = models.PositiveIntegerField("Просрочено", default=0)
+    productivity_percent = models.PositiveIntegerField("Продуктивность", default=0)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "дневная статистика проекта"
+        verbose_name_plural = "дневная статистика проектов"
+        unique_together = ("project", "date")
+        ordering = ["-date"]
+
+    def __str__(self) -> str:
+        return f"{self.project} {self.date}"
+
+
+class ProjectActivity(models.Model):
+    TYPE_TASK_CREATED = "task_created"
+    TYPE_TASK_UPDATED = "task_updated"
+    TYPE_TASK_CLOSED = "task_closed"
+    TYPE_TASK_REOPENED = "task_reopened"
+    TYPE_TASK_CARRIED = "task_carried"
+    TYPE_MEMBER_JOINED = "member_joined"
+    TYPE_MEMBER_LEFT = "member_left"
+    TYPE_CHOICES = (
+        (TYPE_TASK_CREATED, "Задача создана"),
+        (TYPE_TASK_UPDATED, "Задача обновлена"),
+        (TYPE_TASK_CLOSED, "Задача закрыта"),
+        (TYPE_TASK_REOPENED, "Задача открыта"),
+        (TYPE_TASK_CARRIED, "Задача перенесена"),
+        (TYPE_MEMBER_JOINED, "Участник вошел"),
+        (TYPE_MEMBER_LEFT, "Участник вышел"),
+    )
+
+    project = models.ForeignKey(
+        Project,
+        related_name="activities",
+        on_delete=models.CASCADE,
+        verbose_name="Проект",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="project_activities",
+        on_delete=models.CASCADE,
+        verbose_name="Кто сделал",
+    )
+    task = models.ForeignKey(
+        "ProjectTask",
+        related_name="activities",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name="Задача",
+    )
+    activity_type = models.CharField("Тип активности", max_length=40, choices=TYPE_CHOICES)
+    message = models.CharField("Сообщение", max_length=255)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "активность проекта"
+        verbose_name_plural = "активности проектов"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.message
+
+
 class ProjectTask(models.Model):
     STATUS_NEW = "new"
     STATUS_IN_PROGRESS = "in_progress"

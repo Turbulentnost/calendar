@@ -417,6 +417,63 @@ photo=<image-file>
 
 Ответ: объект проекта.
 
+### Карточка активного проекта
+
+`GET /api/calendar/projects/current/dashboard/`
+
+Нужен `X-Project-Token`. Возвращает данные для мобильной карточки проекта: первые 5 участников, количество уникальных аккаунтов проекта, задачи за текущий день, статистику и активность.
+
+Ответ:
+
+```json
+{
+  "project": {
+    "id": 1,
+    "title": "TurboTasks Platform"
+  },
+  "members_count": 12,
+  "recent_members": [
+    {
+      "id": 1,
+      "full_name": "Давид Мангасарян",
+      "nickname": "david",
+      "photo_url": "http://<host>/media/users/photos/avatar.jpg"
+    }
+  ],
+  "today_tasks": [
+    {
+      "id": 5,
+      "title": "UI redesign landing page",
+      "importance": "high",
+      "status": "in_progress",
+      "author": {
+        "id": 1,
+        "full_name": "Давид Мангасарян",
+        "photo_url": null
+      },
+      "assignee": {
+        "id": 2,
+        "full_name": "Мария",
+        "photo_url": null
+      }
+    }
+  ],
+  "statistics": {
+    "completed": 18,
+    "in_progress": 7,
+    "overdue": 2,
+    "productivity": 72
+  },
+  "activity": [
+    {
+      "id": 1,
+      "message": "Давид создал задачу UI redesign landing page",
+      "created_at": "2026-05-12T10:00:00Z"
+    }
+  ]
+}
+```
+
 ### Выйти из активного проекта
 
 `DELETE /api/calendar/projects/current/leave/`

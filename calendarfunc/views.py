@@ -9,7 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Project, ProjectMembership, ProjectTask
+from .models import Project, ProjectActivity, ProjectMembership, ProjectTask
 from .serializers import (
     AdminProjectSerializer,
     ProjectLoginSerializer,
@@ -20,7 +20,12 @@ from .serializers import (
 )
 from user.permissions import IsStaffWithAdminRole
 from .tokens import create_project_token, decode_project_token
-from .services import create_project_invitation_notification, send_project_invitation_push
+from .services import (
+    create_project_invitation_notification,
+    log_project_activity,
+    send_project_invitation_push,
+    sync_project_daily_statistics,
+)
 
 
 def _get_project_token(request) -> str:
@@ -93,6 +98,12 @@ class ProjectListCreateApi(generics.ListCreateAPIView):
             project=project,
             user=request.user,
             defaults={"role": ProjectMembership.PROJECT_ROLE_ADMIN},
+        )
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_MEMBER_JOINED,
+            message=f"{request.user.get_full_name()} создал проект",
         )
         return Response(
             {
@@ -189,6 +200,12 @@ class ProjectLoginApi(APIView):
             user=request.user,
             defaults={"role": ProjectMembership.PROJECT_ROLE_MEMBER},
         )
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_MEMBER_JOINED,
+            message=f"{request.user.get_full_name()} вошел в проект",
+        )
         return Response(
             {
                 "project_token": create_project_token(project),
@@ -208,6 +225,102 @@ class ProjectCurrentApi(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return Response(ProjectSerializer(project, context={"request": request}).data)
+
+
+class ProjectDashboardApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        project = _get_active_project(request)
+        if not project:
+            return Response(
+                {"detail": "Укажите корректный токен проекта."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        today = timezone.localdate()
+        members = (
+            ProjectMembership.objects
+            .select_related("user")
+            .filter(project=project)
+            .order_by("joined_at")
+        )
+        today_tasks = (
+            ProjectTask.objects
+            .select_related("author", "assignee")
+            .filter(project=project, date_from__lte=today, date_to__gte=today)
+            .order_by("deadline", "created_at")
+        )
+        statistics = sync_project_daily_statistics(project, today)
+        activities = (
+            ProjectActivity.objects
+            .select_related("actor", "task")
+            .filter(project=project)
+            .order_by("-created_at")[:10]
+        )
+
+        return Response(
+            {
+                "project": ProjectSerializer(project, context={"request": request}).data,
+                "members_count": members.count(),
+                "recent_members": [
+                    self.serialize_user_membership(item, request)
+                    for item in members[:5]
+                ],
+                "today_tasks": [
+                    self.serialize_dashboard_task(task, request)
+                    for task in today_tasks
+                ],
+                "statistics": {
+                    "completed": statistics.completed_count,
+                    "in_progress": statistics.in_progress_count,
+                    "overdue": statistics.overdue_count,
+                    "productivity": statistics.productivity_percent,
+                },
+                "activity": [
+                    self.serialize_activity(item, request)
+                    for item in activities
+                ],
+            }
+        )
+
+    def serialize_user_membership(self, membership, request):
+        return self.serialize_user(membership.user, request)
+
+    def serialize_dashboard_task(self, task, request):
+        return {
+            "id": task.id,
+            "title": task.short_description,
+            "description": task.description,
+            "importance": task.importance,
+            "status": task.status,
+            "deadline": task.deadline,
+            "date_from": task.date_from,
+            "date_to": task.date_to,
+            "author": self.serialize_user(task.author, request),
+            "assignee": self.serialize_user(task.assignee, request),
+        }
+
+    def serialize_activity(self, activity, request):
+        return {
+            "id": activity.id,
+            "type": activity.activity_type,
+            "message": activity.message,
+            "created_at": activity.created_at,
+            "actor": self.serialize_user(activity.actor, request),
+            "task": activity.task_id,
+        }
+
+    def serialize_user(self, user, request):
+        photo_url = request.build_absolute_uri(user.photo.url) if user.photo else None
+        return {
+            "id": user.id,
+            "nickname": user.nickname,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "full_name": user.get_full_name(),
+            "photo_url": photo_url,
+        }
 
 
 class ProjectInviteApi(APIView):
@@ -319,6 +432,12 @@ class ProjectLeaveApi(APIView):
                 {"detail": "Перед выходом назначьте другого администратора проекта."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_MEMBER_LEFT,
+            message=f"{request.user.get_full_name()} вышел из проекта",
+        )
         membership.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -439,6 +558,17 @@ class ProjectTaskListCreateApi(generics.ListCreateAPIView):
         context["project"] = self.get_project()
         return context
 
+    def perform_create(self, serializer):
+        task = serializer.save()
+        log_project_activity(
+            project=task.project,
+            actor=self.request.user,
+            activity_type=ProjectActivity.TYPE_TASK_CREATED,
+            message=f"{self.request.user.get_full_name()} создал задачу {task.short_description}",
+            task=task,
+        )
+        sync_project_daily_statistics(task.project)
+
 
 class ProjectTaskDetailApi(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProjectTaskSerializer
@@ -494,6 +624,14 @@ class ProjectTaskCloseApi(APIView):
         task.is_closed = True
         task.status = ProjectTask.STATUS_DONE
         task.save(update_fields=["is_closed", "status", "updated_at"])
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_TASK_CLOSED,
+            message=f"{request.user.get_full_name()} закрыл задачу {task.short_description}",
+            task=task,
+        )
+        sync_project_daily_statistics(project)
         return Response(ProjectTaskSerializer(task, context={"request": request, "project": project}).data)
 
 
@@ -520,6 +658,14 @@ class ProjectTaskReopenApi(APIView):
         task.is_closed = False
         task.status = ProjectTask.STATUS_IN_PROGRESS
         task.save(update_fields=["is_closed", "status", "updated_at"])
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_TASK_REOPENED,
+            message=f"{request.user.get_full_name()} открыл задачу {task.short_description}",
+            task=task,
+        )
+        sync_project_daily_statistics(project)
         return Response(ProjectTaskSerializer(task, context={"request": request, "project": project}).data)
 
 
@@ -563,4 +709,12 @@ class ProjectTaskCarryOverApi(APIView):
                 "updated_at",
             ]
         )
+        log_project_activity(
+            project=project,
+            actor=request.user,
+            activity_type=ProjectActivity.TYPE_TASK_CARRIED,
+            message=f"{request.user.get_full_name()} перенес задачу {task.short_description}",
+            task=task,
+        )
+        sync_project_daily_statistics(project)
         return Response(ProjectTaskSerializer(task, context={"request": request, "project": project}).data)

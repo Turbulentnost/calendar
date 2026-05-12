@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Project, ProjectMembership, ProjectNotification, ProjectTask
+from .models import Project, ProjectActivity, ProjectDailyStatistics, ProjectMembership, ProjectNotification, ProjectTask
 
 
 @admin.register(Project)
@@ -49,4 +49,20 @@ class ProjectNotificationAdmin(admin.ModelAdmin):
     list_filter = ("notification_type", "is_read", "created_at")
     search_fields = ("title", "message", "project__title", "recipient__nickname", "sender__nickname")
     autocomplete_fields = ("project", "recipient", "sender")
+
+
+@admin.register(ProjectDailyStatistics)
+class ProjectDailyStatisticsAdmin(admin.ModelAdmin):
+    list_display = ("project", "date", "completed_count", "in_progress_count", "overdue_count", "productivity_percent")
+    list_filter = ("date",)
+    search_fields = ("project__title", "project__login")
+    autocomplete_fields = ("project",)
+
+
+@admin.register(ProjectActivity)
+class ProjectActivityAdmin(admin.ModelAdmin):
+    list_display = ("project", "actor", "activity_type", "message", "created_at")
+    list_filter = ("activity_type", "created_at")
+    search_fields = ("project__title", "actor__nickname", "message")
+    autocomplete_fields = ("project", "actor", "task")
 
